@@ -63,7 +63,7 @@ func NewToken(kind TokenKind, text []rune) *Token {
 // ensure token->Kind == NUM
 func (t *Token) number() int {
 	if t.Kind != NUM {
-		log.Fatal("expected a number, instead: ", *t)
+		errorTok(t, "expected a number")
 	}
 	return t.val
 }
@@ -71,13 +71,14 @@ func (t *Token) number() int {
 // Ensure that the current token is `s`
 func skip(t *Token, s string) *Token {
 	if !t.equal(s) {
-		log.Fatalf("expected '%s'", s)
+		errorTok(t, "expected '%s'", s)
 	}
 	return t.Next
 }
 
 // Tokenize `p` and returns new tokens.
-func tokenize(p []rune) *Token {
+func tokenize() *Token {
+	p := currentInput
 	// start node of the linked list
 	head := new(Token)
 	cur := head
@@ -110,7 +111,7 @@ func tokenize(p []rune) *Token {
 			continue
 		}
 
-		log.Fatal("invalid token")
+		errorAt(p, "invalid token")
 	}
 
 	cur, cur.Next = cur.Next, NewToken(EOF, p)
@@ -128,15 +129,30 @@ func (t *Token) String() string {
 	return s
 }
 
+func errorAt(loc []rune, format string, v ...interface{}) {
+	pos := len(currentInput) - cap(loc)
+	fmt.Fprintln(os.Stderr, string(currentInput))
+	fmt.Fprintf(os.Stderr, "%*s", pos, "") // print pos spaces
+	fmt.Fprintln(os.Stderr, "^ ")
+
+	log.Fatalf(format, v...)
+}
+
+func errorTok(tok *Token, fmt string, v ...interface{}) {
+	errorAt(tok.loc, fmt, v...)
+}
+
+var currentInput []rune
+
 func main() {
 	if len(os.Args) != 2 {
 		log.Fatalf("%s: invalid number of args\n", os.Args[0])
 	}
 
 	// a unicode lexer
-	p := []rune(os.Args[1])
+	currentInput = []rune(os.Args[1])
 
-	var tok *Token = tokenize(p)
+	var tok *Token = tokenize()
 	// fmt.Fprintln(os.Stderr, "input: ", p)
 	// fmt.Fprintln(os.Stderr, tok.String())
 
