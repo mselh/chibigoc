@@ -28,6 +28,16 @@ func strtol(s *[]rune) int64 {
 	return val
 }
 
+func assert(ok bool) {
+	if !ok {
+		panic("FAIL")
+	}
+}
+
+//
+// Tokenizer
+//
+
 // token data type
 // it is implemented as a linked list
 
@@ -104,7 +114,8 @@ func tokenize() *Token {
 			continue
 		}
 
-		if p[0] == '+' || p[0] == '-' {
+		if unicode.IsPunct(p[0]) ||
+			p[0] == '+' || p[0] == '-' {
 			cur.Next = NewToken(PUNCT, p[0:1])
 			cur = cur.Next
 			p = p[1:]
@@ -116,6 +127,155 @@ func tokenize() *Token {
 
 	cur, cur.Next = cur.Next, NewToken(EOF, p)
 	return head.Next
+}
+
+//
+// Parser
+//
+
+type NodeKind int
+
+const (
+	ND_ADD NodeKind = iota // +
+	ND_SUB                 // -
+	ND_MUL                 // *
+	ND_DIV                 // /
+	ND_NUM                 // Integer
+)
+
+// AST node type
+type Node struct {
+	kind NodeKind // node kind
+	lhs  *Node    // left hand side
+	rhs  *Node    // right hand side
+	val  int      // Used if kind == ND_NUM
+}
+
+func NewNode(kind NodeKind) *Node {
+	node := new(Node)
+	node.kind = kind
+
+	return node
+}
+
+func NewBinary(kind NodeKind, lhs *Node, rhs *Node) *Node {
+	node := NewNode(kind)
+	node.lhs = lhs
+	node.rhs = rhs
+
+	return node
+}
+
+func NewNum(val int) *Node {
+	node := NewNode(ND_NUM)
+	node.val = val
+
+	return node
+}
+
+// expr = mul ("+" mul | "-" mul)*
+func expr(rest **Token, tok *Token) *Node {
+	node := mul(&tok, tok)
+
+	for {
+		if tok.equal("+") {
+			node = NewBinary(ND_ADD, node, mul(&tok, tok.Next))
+			continue
+		}
+
+		if tok.equal("-") {
+			node = NewBinary(ND_SUB, node, mul(&tok, tok.Next))
+			continue
+		}
+
+		*rest = tok
+		return node
+	}
+}
+
+// mul = primary ("*" primary | "/" primary)*
+func mul(rest **Token, tok *Token) *Node {
+	node := primary(&tok, tok) // left node for the new binary node
+
+	for {
+		if tok.equal("*") {
+			// rhs is primary(&tok,.)
+			node = NewBinary(ND_MUL, node, primary(&tok, tok.Next))
+			continue
+		}
+
+		if tok.equal("/") {
+			node = NewBinary(ND_DIV, node, primary(&tok, tok.Next))
+			continue
+		}
+
+		*rest = tok
+		return node
+	}
+}
+
+// primary = "(" expr ")" | num
+func primary(rest **Token, tok *Token) *Node {
+	if tok.equal("(") {
+		node := expr(&tok, tok.Next)
+		*rest = skip(tok, ")")
+		return node
+	}
+
+	if tok.Kind == NUM {
+		node := NewNum(tok.val)
+		*rest = tok.Next
+		return node
+	}
+
+	errorTok(tok, "expected an expression")
+	return nil
+}
+
+//
+// Code generator
+//
+
+var depth int = 0
+
+func push() {
+	fmt.Println(" push %rax")
+	depth++
+}
+
+func pop(arg string) {
+	fmt.Printf(" pop %s\n", arg)
+	depth--
+}
+
+func genExpr(node *Node) {
+	if node.kind == ND_NUM {
+		fmt.Printf(" mov $%d, %%rax\n", node.val)
+		return
+	}
+
+	genExpr(node.rhs)
+	push()
+	genExpr(node.lhs)
+	pop("%rdi")
+
+	switch node.kind {
+	case ND_ADD:
+		fmt.Println(" add %rdi, %rax")
+		return
+	case ND_SUB:
+		fmt.Println(" sub %rdi, %rax")
+		return
+	case ND_MUL:
+		fmt.Println(" imul %rdi, %rax")
+		return
+	case ND_DIV:
+		fmt.Println(" cqo")
+		fmt.Println(" idiv %rdi, %rax")
+		return
+	}
+
+	log.Fatalln("invalid expression")
 }
 
 // walks and prints the linked list
@@ -152,32 +312,20 @@ func main() {
 	// a unicode lexer
 	currentInput = []rune(os.Args[1])
 
+	// Tokenize  and parse.
 	var tok *Token = tokenize()
-	// fmt.Fprintln(os.Stderr, "input: ", p)
-	// fmt.Fprintln(os.Stderr, tok.String())
+	node := expr(&tok, tok)
+
+	if tok.Kind != EOF {
+		errorTok(tok, "extra token")
+	}
 
 	fmt.Println(" .globl main")
 	fmt.Println("main:")
 
-	// the first token must be a number
-	fmt.Printf("  mov $%d, %%rax\n", tok.number())
-	tok = tok.Next
-
-	// ... followed by either `+ <number>` or `- <number>`.
-	for tok.Kind != EOF {
-
-		if tok.equal("+") {
-			fmt.Printf(" add $%d, %%rax\n", tok.Next.number())
-			tok = tok.Next.Next
-			continue
-		}
-
-		tok = skip(tok, "-")
-		fmt.Printf(" sub $%d, %%rax\n", tok.number())
-		tok = tok.Next
-		continue
-
-	}
-
+	// Traverse the AST to emit assembly.
+	genExpr(node)
 	fmt.Println(" ret")
+
+	assert(depth == 0)
 }
