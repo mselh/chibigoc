@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"unicode"
 )
 
@@ -32,6 +33,33 @@ func assert(ok bool) {
 	if !ok {
 		panic("FAIL")
 	}
+}
+
+// Read a punctuator token from p and returns its length
+func readPunct(p []rune) int {
+
+	var s string
+	// no need to stringify the []rune,
+	// more than max. of possible punctuation length
+	if len(p) > 2 {
+		s = string(p[:2])
+	} else {
+		s = string(p[:len(p)])
+	}
+
+	if strings.HasPrefix(s, "==") ||
+		strings.HasPrefix(s, "!=") ||
+		strings.HasPrefix(s, "<=") ||
+		strings.HasPrefix(s, ">=") {
+		return 2
+	}
+
+	if unicode.IsPunct(p[0]) ||
+		strings.HasPrefix(s, "+") || strings.HasPrefix(s, "-") ||
+		strings.HasPrefix(s, "<") || strings.HasPrefix(s, ">") {
+		return 1
+	}
+	return 0
 }
 
 //
@@ -114,11 +142,10 @@ func tokenize() *Token {
 			continue
 		}
 
-		if unicode.IsPunct(p[0]) ||
-			p[0] == '+' || p[0] == '-' {
-			cur.Next = NewToken(PUNCT, p[0:1])
+		if punctLen := readPunct(p); punctLen > 0 {
+			cur.Next = NewToken(PUNCT, p[0:punctLen])
 			cur = cur.Next
-			p = p[1:]
+			p = p[punctLen:]
 			continue
 		}
 
@@ -141,6 +168,10 @@ const (
 	ND_MUL                 // *
 	ND_DIV                 // /
 	ND_NEG                 // unary -
+	ND_EQ                  // ==
+	ND_NE                  // !=
+	ND_LT                  // <
+	ND_LE                  // <=
 	ND_NUM                 // Integer
 )
 
@@ -180,8 +211,66 @@ func NewNum(val int) *Node {
 	return node
 }
 
-// expr = mul ("+" mul | "-" mul)*
+// expr = equality
 func expr(rest **Token, tok *Token) *Node {
+	return equality(rest, tok)
+}
+
+// equality = relational ("==" relational | "!=" relational)*
+func equality(rest **Token, tok *Token) *Node {
+	node := relational(&tok, tok)
+
+	for {
+
+		if tok.equal("==") {
+			node = NewBinary(ND_EQ, node, relational(&tok, tok.Next))
+			continue
+		}
+
+		if tok.equal("!=") {
+			node = NewBinary(ND_NE, node, relational(&tok, tok.Next))
+			continue
+		}
+
+		*rest = tok
+		return node
+	}
+}
+
+// relational = add ("<" add | "<=" add | ">" add | ">=" add)*
+func relational(rest **Token, tok *Token) *Node {
+	node := add(&tok, tok)
+
+	for {
+
+		if tok.equal("<") {
+			node = NewBinary(ND_LT, node, add(&tok, tok.Next))
+			continue
+		}
+
+		if tok.equal("<=") {
+			node = NewBinary(ND_LE, node, add(&tok, tok.Next))
+			continue
+		}
+
+		if tok.equal(">") {
+			node = NewBinary(ND_LT, add(&tok, tok.Next), node)
+			continue
+		}
+
+		if tok.equal(">=") {
+			node = NewBinary(ND_LE, add(&tok, tok.Next), node)
+			continue
+		}
+
+		*rest = tok
+		return node
+	}
+
+}
+
+// add = mul ("+" mul | "-" mul)*
+func add(rest **Token, tok *Token) *Node {
 	node := mul(&tok, tok)
 
 	for {
@@ -300,8 +389,24 @@ func genExpr(node *Node) {
 		return
 	case ND_DIV:
 		fmt.Println(" cqo")
-		fmt.Println(" idiv %rdi, %rax")
+		fmt.Println(" idiv %rdi")
 		return
+	case ND_EQ, ND_NE, ND_LT, ND_LE:
+		fmt.Println(" cmp %rdi, %rax")
+
+		if node.kind == ND_EQ {
+			fmt.Println(" sete %al")
+		} else if node.kind == ND_NE {
+			fmt.Println(" setne %al")
+		} else if node.kind == ND_LT {
+			fmt.Println(" setl %al")
+		} else if node.kind == ND_LE {
+			fmt.Println(" setle %al")
+		}
+
+		fmt.Println(" movzb %al, %rax")
+		return
+
 	}
 
 	log.Fatalln("invalid expression")
@@ -323,6 +428,7 @@ func errorAt(loc []rune, format string, v ...interface{}) {
 	fmt.Fprintln(os.Stderr, string(currentInput))
 	fmt.Fprintf(os.Stderr, "%*s", pos, "") // print pos spaces
 	fmt.Fprintln(os.Stderr, "^ ")
+	fmt.Fprintln(os.Stderr, "token: ", string(loc))
 
 	log.Fatalf(format, v...)
 }
