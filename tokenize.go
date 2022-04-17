@@ -66,6 +66,16 @@ func readPunct(p []rune) int {
 	return 0
 }
 
+// Returns true if c is valid as the first character of an identifier.
+func isIdent1(r rune) bool {
+	return ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z') || r == '_'
+}
+
+// Returns true if c is valid as a non-first character of an identifier.
+func isIdent2(r rune) bool {
+	return isIdent1(r) || ('0' <= r && r <= '9')
+}
+
 //
 // Tokenizer
 //
@@ -148,10 +158,14 @@ func tokenize() *Token {
 		}
 
 		// identifier
-		if p[0] >= 'a' && p[0] <= 'z' {
-			cur.Next = NewToken(IDENT, p[0:1])
+		if isIdent1(p[0]) {
+			fin := 1
+			for isIdent2(p[fin]) {
+				fin++
+			}
+			cur.Next = NewToken(IDENT, p[0:fin])
 			cur = cur.Next
-			p = p[1:]
+			p = p[fin:]
 			continue
 		}
 

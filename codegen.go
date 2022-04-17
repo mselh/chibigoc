@@ -5,6 +5,17 @@ import (
 	"log"
 )
 
+// helpers
+
+// Round up `n` to the nearest multiple of `align`.
+// For instance,
+//
+// align_to(5, 8) returns 8
+// align_to(11, 8) returns 16.
+func alignTo(n, align int) int {
+	return (n + align - 1) / align * align
+}
+
 //
 // Code generator
 //
@@ -23,10 +34,8 @@ func pop(arg string) {
 // It's an error if a given node does not reside in memory.
 func genAddr(node *Node) {
 	if node.kind == ND_VAR {
-		var offset int = (int(node.name) - 'a' + 1) * 8
-		fmt.Printf(" lea %d(%%rbp), %%rax\n", -offset)
-		// lea %offset(%src), %t
-		// t = %rsp + %d
+		fmt.Printf(" lea %d(%%rbp), %%rax\n", node.variable.offset)
+		// `lea %offset(%src), %t` => t = %rsp + %d
 		return
 	}
 
@@ -110,22 +119,28 @@ func genStmt(node *Node) {
 	log.Fatalln("invalid expression")
 }
 
-func codegen(node *Node) {
+// Assign offsets to local variables
+func assignLVarOffsets(prog *Function) {
+	offset := 0
+	for v := prog.locals; v != nil; v = v.next {
+		offset += 8
+		v.offset = -offset
+	}
+	prog.stackSize = alignTo(offset, 16)
+}
+
+func codegen(prog *Function) {
+	assignLVarOffsets(prog)
+
 	fmt.Println(" .globl main")
 	fmt.Println("main:")
 
 	// Prologue
 	fmt.Println(" push %rbp")
 	fmt.Println(" mov %rsp, %rbp")
-	fmt.Println(" sub $208, %rsp")
-	// a note from github.com/ksco
-	// `208 == ('z' - 'a' + 1) * 8,
-	// it's the stack size for all possible,
-	// single-letter 64 bit integer variables.`
-	//
-	// right now, stack size is fixed to 208
+	fmt.Printf(" sub $%d, %%rsp\n", prog.stackSize)
 
-	for n := node; n != nil; n = n.next {
+	for n := prog.body; n != nil; n = n.next {
 		genStmt(n)
 		assert(depth == 0)
 	}

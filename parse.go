@@ -1,5 +1,44 @@
 package main
 
+import (
+	"fmt"
+)
+
+// local variable
+type Obj struct {
+	next   *Obj
+	name   string // variable name
+	offset int    // offset from rbp
+}
+
+// Find a local variable by name.
+// walks the token list
+func findVar(tok *Token) *Obj {
+	for v := locals; v != nil; v = v.next {
+		if v.name == string(tok.loc) {
+			return v
+		}
+	}
+	return nil
+}
+
+// function
+type Function struct {
+	body      *Node
+	locals    *Obj
+	stackSize int
+}
+
+func (f *Function) String() string {
+	str := `{ "function body": [`
+	for v := f.body; v != nil; v = v.next {
+		str += v.String() + ","
+	}
+	return str + "]}"
+}
+
+// AST node
+
 type NodeKind int
 
 const (
@@ -18,14 +57,60 @@ const (
 	ND_NUM                       // Integer
 )
 
+func (nd NodeKind) String() string {
+	switch nd {
+	case ND_ADD:
+		return "+"
+	case ND_SUB:
+		return " - "
+	case ND_MUL:
+		return " * "
+	case ND_DIV:
+		return " / "
+	case ND_NEG:
+		return " unary - "
+	case ND_EQ:
+		return "  =="
+	case ND_NE:
+		return "  !="
+	case ND_LT:
+		return "  < "
+	case ND_LE:
+		return "  <= "
+	case ND_ASSIGN:
+		return " = "
+	case ND_EXPR_STMT:
+		return " Expression statement"
+	case ND_VAR:
+		return " Variable "
+	case ND_NUM:
+		return " Integer "
+	default:
+		return "unknown node kind"
+	}
+}
+
 // AST node type
 type Node struct {
-	kind NodeKind // node kind
-	next *Node    // next node, (nodes are stored in a linked list)
-	lhs  *Node    // left hand side
-	rhs  *Node    // right hand side
-	name byte     // used if kind == ND_VAR (byte==char)
-	val  int      // used if kind == ND_NUM
+	kind     NodeKind // node kind
+	next     *Node    // next node, (nodes are stored in a linked list)
+	lhs      *Node    // left hand side
+	rhs      *Node    // right hand side
+	variable *Obj     // used if kind == ND_VAR
+	val      int      // used if kind == ND_NUM
+}
+
+func (n *Node) String() string {
+	// print recursively
+	if n == nil {
+		return "nil"
+	}
+
+	lhs := n.lhs.String()
+	rhs := n.rhs.String()
+
+	str := fmt.Sprintln(`{ "kind" : "`, n.kind, `", "var": "`, n.variable, `", "val": "`, n.val, "\"")
+	return str + ",\"left\": " + lhs + ", \"right\": " + rhs + "}"
 }
 
 func NewNode(kind NodeKind) *Node {
@@ -56,10 +141,20 @@ func NewNum(val int) *Node {
 	return node
 }
 
-func NewVarNode(name byte) *Node {
+func NewVarNode(v *Obj) *Node {
 	node := NewNode(ND_VAR)
-	node.name = name
+	node.variable = v
 	return node
+}
+
+// adds to the start of the locals
+// LVar = Local Variable
+func newLVar(name string) *Obj {
+	v := new(Obj)
+	v.name = name
+	v.next = locals
+	locals = v
+	return v
 }
 
 // stmt = expr-stmt
@@ -208,9 +303,12 @@ func primary(rest **Token, tok *Token) *Node {
 	}
 
 	if tok.Kind == IDENT {
-		node := NewVarNode(byte(tok.loc[0]))
+		v := findVar(tok)
+		if v == nil {
+			v = newLVar(string(tok.loc))
+		}
 		*rest = tok.Next
-		return node
+		return NewVarNode(v)
 	}
 
 	if tok.Kind == NUM {
@@ -225,12 +323,16 @@ func primary(rest **Token, tok *Token) *Node {
 
 // program = stmt*
 // the returned Node is also a linked list of Nodes
-func parse(tok *Token) *Node {
+func parse(tok *Token) *Function {
 	head := new(Node)
 	cur := head
 	for tok.Kind != EOF {
 		cur.next = stmt(&tok, tok)
 		cur = cur.next
 	}
-	return head.next
+
+	prog := new(Function)
+	prog.body = head.next
+	prog.locals = locals
+	return prog
 }

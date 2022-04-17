@@ -11,11 +11,18 @@ func assert(ok bool) {
 	}
 }
 
-// at this stage chibicc has globals
+// at this stage chibicc has the following globals
+//
+// want them to be as visible as possible,
+// hence, before the main()
 var currentInput []rune
 
 // codegen's depth state
 var depth int = 0
+
+// All local variable instances created during parsing are
+// accumulated to this list
+var locals *Obj
 
 func main() {
 	if len(os.Args) != 2 {
@@ -27,8 +34,10 @@ func main() {
 
 	// Tokenize  and parse.
 	var tok *Token = tokenize()
-	var node *Node = parse(tok)
+	//log.Println(tok.String())
+	var prog *Function = parse(tok)
+	//log.Println(prog)
 
 	// Traverse the AST to emit assembly.
-	codegen(node)
+	codegen(prog)
 }
