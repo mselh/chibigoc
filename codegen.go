@@ -19,6 +19,20 @@ func pop(arg string) {
 	depth--
 }
 
+// Compute the absolute address of a given node.
+// It's an error if a given node does not reside in memory.
+func genAddr(node *Node) {
+	if node.kind == ND_VAR {
+		var offset int = (int(node.name) - 'a' + 1) * 8
+		fmt.Printf(" lea %d(%%rbp), %%rax\n", -offset)
+		// lea %offset(%src), %t
+		// t = %rsp + %d
+		return
+	}
+
+	log.Fatalln("not an lvalue")
+}
+
 func genExpr(node *Node) {
 
 	switch node.kind {
@@ -28,6 +42,22 @@ func genExpr(node *Node) {
 	case ND_NEG:
 		genExpr(node.lhs)
 		fmt.Println(" neg %rax")
+		return
+	case ND_VAR:
+		genAddr(node)
+		fmt.Println(" mov (%rax), %rax")
+		// rax ta adres var
+		// rax in isaret ettigi adresin icindeki degeri, rax a tasi
+		// new_rax = *rax
+		return
+	case ND_ASSIGN:
+		genAddr(node.lhs)
+		push()
+		genExpr(node.rhs)
+		pop("%rdi")
+		fmt.Println(" mov %rax, (%rdi)")
+		// raxdaki degeri, rdi nin isaret ettigi konuma tasi
+		// *rdi = rax
 		return
 	}
 
@@ -84,10 +114,23 @@ func codegen(node *Node) {
 	fmt.Println(" .globl main")
 	fmt.Println("main:")
 
+	// Prologue
+	fmt.Println(" push %rbp")
+	fmt.Println(" mov %rsp, %rbp")
+	fmt.Println(" sub $208, %rsp")
+	// a note from github.com/ksco
+	// `208 == ('z' - 'a' + 1) * 8,
+	// it's the stack size for all possible,
+	// single-letter 64 bit integer variables.`
+	//
+	// right now, stack size is fixed to 208
+
 	for n := node; n != nil; n = n.next {
 		genStmt(n)
 		assert(depth == 0)
 	}
 
+	fmt.Println(" mov %rbp, %rsp")
+	fmt.Println(" pop %rbp")
 	fmt.Println(" ret")
 }

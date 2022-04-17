@@ -30,6 +30,12 @@ func strtol(s *[]rune) int64 {
 }
 
 // Read a punctuator token from p and returns its length
+//
+// unicode.isPunct behaves differently then `ctype.h => int ispunct(char)`
+//
+// All punctuations in C:
+// ! " # $ % & ' ( ) * + , - . / : ;
+// < = > ? @ [ \ ] ^ _ ` { | } ~
 func readPunct(p []rune) int {
 
 	var s string
@@ -49,8 +55,12 @@ func readPunct(p []rune) int {
 	}
 
 	if unicode.IsPunct(p[0]) ||
-		strings.HasPrefix(s, "+") || strings.HasPrefix(s, "-") ||
-		strings.HasPrefix(s, "<") || strings.HasPrefix(s, ">") {
+		strings.HasPrefix(s, "+") ||
+		strings.HasPrefix(s, "-") ||
+		strings.HasPrefix(s, "<") ||
+		strings.HasPrefix(s, ">") ||
+		strings.HasPrefix(s, "=") ||
+		strings.HasPrefix(s, ";") {
 		return 1
 	}
 	return 0
@@ -67,6 +77,7 @@ type TokenKind int
 
 const (
 	PUNCT TokenKind = iota // punctuators
+	IDENT                  // identifiers
 	NUM                    // numeric literals
 	EOF                    // end-of-file markers
 )
@@ -136,6 +147,15 @@ func tokenize() *Token {
 			continue
 		}
 
+		// identifier
+		if p[0] >= 'a' && p[0] <= 'z' {
+			cur.Next = NewToken(IDENT, p[0:1])
+			cur = cur.Next
+			p = p[1:]
+			continue
+		}
+
+		// punctuators
 		if punctLen := readPunct(p); punctLen > 0 {
 			cur.Next = NewToken(PUNCT, p[0:punctLen])
 			cur = cur.Next
@@ -156,7 +176,7 @@ func (t *Token) String() string {
 	n := new(Token)
 	*n = *t
 	for ; n != nil; n = n.Next {
-		s += fmt.Sprintln("[rune loc: ", (n.loc), " kind: ", n.Kind, " val:", n.val, "],")
+		s += fmt.Sprintln("[rune loc: ", (n.loc), "str: ", string(n.loc), " kind: ", n.Kind, " val:", n.val, "],")
 	}
 	return s
 }
