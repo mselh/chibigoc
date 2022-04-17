@@ -111,7 +111,13 @@ func genExpr(node *Node) {
 }
 
 func genStmt(node *Node) {
-	if node.kind == ND_EXPR_STMT {
+	switch node.kind {
+	case ND_RETURN:
+		genExpr(node.lhs)
+		fmt.Println(" jmp .L.return")
+		// jump to .L.return label
+		return
+	case ND_EXPR_STMT:
 		genExpr(node.lhs)
 		return
 	}
@@ -145,6 +151,7 @@ func codegen(prog *Function) {
 		assert(depth == 0)
 	}
 
+	fmt.Println(".L.return:")
 	fmt.Println(" mov %rbp, %rsp")
 	fmt.Println(" pop %rbp")
 	fmt.Println(" ret")

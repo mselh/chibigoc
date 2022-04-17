@@ -52,6 +52,7 @@ const (
 	ND_LT                        // <
 	ND_LE                        // <=
 	ND_ASSIGN                    // =
+	ND_RETURN                    // "return"
 	ND_EXPR_STMT                 // Expression statement
 	ND_VAR                       // Variable
 	ND_NUM                       // Integer
@@ -157,8 +158,15 @@ func newLVar(name string) *Obj {
 	return v
 }
 
-// stmt = expr-stmt
+// stmt = "return" expr ";"
+//      | expr-stmt
 func stmt(rest **Token, tok *Token) *Node {
+	if tok.equal("return") {
+		node := NewUnary(ND_RETURN, expr(&tok, tok.Next))
+		*rest = skip(tok, ";")
+		return node
+	}
+
 	return exprStmt(rest, tok)
 }
 

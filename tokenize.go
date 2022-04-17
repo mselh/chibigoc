@@ -76,6 +76,15 @@ func isIdent2(r rune) bool {
 	return isIdent1(r) || ('0' <= r && r <= '9')
 }
 
+// the return string's token type is specified here
+func convertKeywords(tok *Token) {
+	for t := tok; t.Kind != EOF; t = t.Next {
+		if t.equal("return") {
+			t.Kind = KEYWORD
+		}
+	}
+}
+
 //
 // Tokenizer
 //
@@ -86,11 +95,29 @@ func isIdent2(r rune) bool {
 type TokenKind int
 
 const (
-	PUNCT TokenKind = iota // punctuators
-	IDENT                  // identifiers
-	NUM                    // numeric literals
-	EOF                    // end-of-file markers
+	PUNCT   TokenKind = iota // punctuators
+	IDENT                    // identifiers
+	KEYWORD                  // keywords
+	NUM                      // numeric literals
+	EOF                      // end-of-file markers
 )
+
+func (tk TokenKind) String() string {
+	switch tk {
+	case PUNCT:
+		return "punctuators"
+	case IDENT:
+		return "identifiers"
+	case KEYWORD:
+		return "keywords"
+	case NUM:
+		return "numeric literals"
+	case EOF:
+		return "end-of-file markers"
+	default:
+		return "token kind is not known"
+	}
+}
 
 type Token struct {
 	Kind TokenKind // token kind
@@ -157,7 +184,7 @@ func tokenize() *Token {
 			continue
 		}
 
-		// identifier
+		// identifier or keyword
 		if isIdent1(p[0]) {
 			fin := 1
 			for isIdent2(p[fin]) {
@@ -181,6 +208,7 @@ func tokenize() *Token {
 	}
 
 	cur, cur.Next = cur.Next, NewToken(EOF, p)
+	convertKeywords(head.Next)
 	return head.Next
 }
 
