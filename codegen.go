@@ -112,6 +112,11 @@ func genExpr(node *Node) {
 
 func genStmt(node *Node) {
 	switch node.kind {
+	case ND_BLOCK:
+		for n := node.body; n != nil; n = n.next {
+			genStmt(n)
+		}
+		return
 	case ND_RETURN:
 		genExpr(node.lhs)
 		fmt.Println(" jmp .L.return")
@@ -146,10 +151,9 @@ func codegen(prog *Function) {
 	fmt.Println(" mov %rsp, %rbp")
 	fmt.Printf(" sub $%d, %%rsp\n", prog.stackSize)
 
-	for n := prog.body; n != nil; n = n.next {
-		genStmt(n)
-		assert(depth == 0)
-	}
+	// assumes body is a ND_BLOCK kind
+	genStmt(prog.body)
+	assert(depth == 0)
 
 	fmt.Println(".L.return:")
 	fmt.Println(" mov %rbp, %rsp")

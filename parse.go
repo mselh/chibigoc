@@ -53,6 +53,7 @@ const (
 	ND_LE                        // <=
 	ND_ASSIGN                    // =
 	ND_RETURN                    // "return"
+	ND_BLOCK                     // {...}
 	ND_EXPR_STMT                 // Expression statement
 	ND_VAR                       // Variable
 	ND_NUM                       // Integer
@@ -86,6 +87,10 @@ func (nd NodeKind) String() string {
 		return " Variable "
 	case ND_NUM:
 		return " Integer "
+	case ND_RETURN:
+		return "return"
+	case ND_BLOCK:
+		return "Block"
 	default:
 		return "unknown node kind"
 	}
@@ -93,24 +98,31 @@ func (nd NodeKind) String() string {
 
 // AST node type
 type Node struct {
-	kind     NodeKind // node kind
-	next     *Node    // next node, (nodes are stored in a linked list)
-	lhs      *Node    // left hand side
-	rhs      *Node    // right hand side
-	variable *Obj     // used if kind == ND_VAR
-	val      int      // used if kind == ND_NUM
+	kind NodeKind // node kind
+	next *Node    // next node, (nodes are stored in a linked list)
+	lhs  *Node    // left hand side
+	rhs  *Node    // right hand side
+
+	// Block, used if kind == ND_BLOCK
+	body *Node
+
+	variable *Obj // used if kind == ND_VAR
+	val      int  // used if kind == ND_NUM
 }
 
 func (n *Node) String() string {
 	// print recursively
 	if n == nil {
-		return "nil"
+		return "\"nil\""
 	}
 
 	lhs := n.lhs.String()
 	rhs := n.rhs.String()
 
-	str := fmt.Sprintln(`{ "kind" : "`, n.kind, `", "var": "`, n.variable, `", "val": "`, n.val, "\"")
+	str := fmt.Sprintln(`{ "kind" : "`, n.kind,
+		`", "var": "`, n.variable,
+		`", "val": "`, n.val, "\",",
+		`"body": `, n.body)
 	return str + ",\"left\": " + lhs + ", \"right\": " + rhs + "}"
 }
 
@@ -159,6 +171,7 @@ func newLVar(name string) *Obj {
 }
 
 // stmt = "return" expr ";"
+//      | "{" compound-stmt
 //      | expr-stmt
 func stmt(rest **Token, tok *Token) *Node {
 	if tok.equal("return") {
@@ -167,7 +180,27 @@ func stmt(rest **Token, tok *Token) *Node {
 		return node
 	}
 
+	if tok.equal("{") {
+		return compoundStmt(rest, tok.Next)
+	}
+
 	return exprStmt(rest, tok)
+}
+
+// compound-stmt = stmt* "}"
+func compoundStmt(rest **Token, tok *Token) *Node {
+	head := new(Node)
+	cur := head
+	for !tok.equal("}") {
+		cur.next = stmt(&tok, tok)
+		cur = cur.next
+	}
+
+	node := NewNode(ND_BLOCK)
+	node.body = head.next
+	*rest = tok.Next
+
+	return node
 }
 
 // expr-stmt = expr ";"
@@ -332,15 +365,11 @@ func primary(rest **Token, tok *Token) *Node {
 // program = stmt*
 // the returned Node is also a linked list of Nodes
 func parse(tok *Token) *Function {
-	head := new(Node)
-	cur := head
-	for tok.Kind != EOF {
-		cur.next = stmt(&tok, tok)
-		cur = cur.next
-	}
+	// this commit we expect program to start with '{'
+	tok = skip(tok, "{")
 
 	prog := new(Function)
-	prog.body = head.next
+	prog.body = compoundStmt(&tok, tok)
 	prog.locals = locals
 	return prog
 }
