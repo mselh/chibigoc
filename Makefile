@@ -1,4 +1,6 @@
-chibicc: main.go
+SRCS=$(wildcard *.go)
+
+chibicc: $(SRCS)
 	rm -f *.s
 	go build -o chibicc .
 

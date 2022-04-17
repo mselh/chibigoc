@@ -71,12 +71,23 @@ func genExpr(node *Node) {
 	log.Fatalln("invalid expression")
 }
 
+func genStmt(node *Node) {
+	if node.kind == ND_EXPR_STMT {
+		genExpr(node.lhs)
+		return
+	}
+
+	log.Fatalln("invalid expression")
+}
+
 func codegen(node *Node) {
 	fmt.Println(" .globl main")
 	fmt.Println("main:")
 
-	genExpr(node)
-	fmt.Println(" ret")
+	for n := node; n != nil; n = n.next {
+		genStmt(n)
+		assert(depth == 0)
+	}
 
-	assert(depth == 0)
+	fmt.Println(" ret")
 }

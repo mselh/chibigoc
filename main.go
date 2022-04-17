@@ -27,11 +27,7 @@ func main() {
 
 	// Tokenize  and parse.
 	var tok *Token = tokenize()
-	node := expr(&tok, tok)
-
-	if tok.Kind != EOF {
-		errorTok(tok, "extra token")
-	}
+	var node *Node = parse(tok)
 
 	// Traverse the AST to emit assembly.
 	codegen(node)

@@ -3,24 +3,26 @@ package main
 type NodeKind int
 
 const (
-	ND_ADD NodeKind = iota // +
-	ND_SUB                 // -
-	ND_MUL                 // *
-	ND_DIV                 // /
-	ND_NEG                 // unary -
-	ND_EQ                  // ==
-	ND_NE                  // !=
-	ND_LT                  // <
-	ND_LE                  // <=
-	ND_NUM                 // Integer
+	ND_ADD       NodeKind = iota // +
+	ND_SUB                       // -
+	ND_MUL                       // *
+	ND_DIV                       // /
+	ND_NEG                       // unary -
+	ND_EQ                        // ==
+	ND_NE                        // !=
+	ND_LT                        // <
+	ND_LE                        // <=
+	ND_EXPR_STMT                 // Expression statement
+	ND_NUM                       // Integer
 )
 
 // AST node type
 type Node struct {
 	kind NodeKind // node kind
+	next *Node    // next node, (nodes are stored in a linked list)
 	lhs  *Node    // left hand side
 	rhs  *Node    // right hand side
-	val  int      // Used if kind == ND_NUM
+	val  int      // used if kind == ND_NUM
 }
 
 func NewNode(kind NodeKind) *Node {
@@ -48,6 +50,18 @@ func NewNum(val int) *Node {
 	node := NewNode(ND_NUM)
 	node.val = val
 
+	return node
+}
+
+// stmt = expr-stmt
+func stmt(rest **Token, tok *Token) *Node {
+	return exprStmt(rest, tok)
+}
+
+// expr-stmt = expr ";"
+func exprStmt(rest **Token, tok *Token) *Node {
+	node := NewUnary(ND_EXPR_STMT, expr(&tok, tok))
+	*rest = skip(tok, ";")
 	return node
 }
 
@@ -182,4 +196,16 @@ func primary(rest **Token, tok *Token) *Node {
 
 	errorTok(tok, "expected an expression")
 	return nil
+}
+
+// program = stmt*
+// the returned Node is also a linked list of Nodes
+func parse(tok *Token) *Node {
+	head := new(Node)
+	cur := head
+	for tok.Kind != EOF {
+		cur.next = stmt(&tok, tok)
+		cur = cur.next
+	}
+	return head.next
 }
