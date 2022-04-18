@@ -54,7 +54,7 @@ const (
 	ND_ASSIGN                    // =
 	ND_RETURN                    // "return"
 	ND_IF                        // "if"
-	ND_FOR                       // "for"
+	ND_FOR                       // "for" or "while"
 	ND_BLOCK                     // {...}
 	ND_EXPR_STMT                 // Expression statement
 	ND_VAR                       // Variable
@@ -187,6 +187,7 @@ func newLVar(name string) *Obj {
 // stmt = "return" expr ";"
 //      | "if" "(" expr ")" stmt ("else" stmt)?
 //      | "for" "(" expr-stmt expr? ";" expr? ")" stmt
+//      | "while" "(" expr ")" stmt
 //      | "{" compound-stmt
 //      | expr-stmt
 func stmt(rest **Token, tok *Token) *Node {
@@ -225,6 +226,16 @@ func stmt(rest **Token, tok *Token) *Node {
 		if !tok.equal(")") {
 			node.inc = expr(&tok, tok)
 		}
+		tok = skip(tok, ")")
+
+		node.then = stmt(rest, tok)
+		return node
+	}
+
+	if tok.equal("while") {
+		node := NewNode(ND_FOR)
+		tok = skip(tok.Next, "(")
+		node.cond = expr(&tok, tok)
 		tok = skip(tok, ")")
 
 		node.then = stmt(rest, tok)
