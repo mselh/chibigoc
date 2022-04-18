@@ -125,7 +125,7 @@ func (t *Token) equal(s string) bool {
 }
 
 func (t *Token) isKeyword() bool {
-	kw := [3]string{"return", "if", "else"}
+	kw := [...]string{"return", "if", "else", "for"}
 
 	for _, v := range kw {
 		if t.equal(v) {

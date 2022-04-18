@@ -125,6 +125,22 @@ func genStmt(node *Node) {
 		}
 		fmt.Printf(".L.end.%d:\n", count)
 		return
+	case ND_FOR:
+		count++
+		genStmt(node.init)
+		fmt.Printf(".L.begin.%d:\n", count)
+		if node.cond != nil {
+			genExpr(node.cond)
+			fmt.Println(" cmp $0, %rax")
+			fmt.Printf(" je .L.end.%d\n", count)
+		}
+		genStmt(node.then)
+		if node.inc != nil {
+			genExpr(node.inc)
+		}
+		fmt.Printf("  jmp .L.begin.%d\n", count)
+		fmt.Printf(".L.end.%d:\n", count)
+		return
 	case ND_BLOCK:
 		for n := node.body; n != nil; n = n.next {
 			genStmt(n)

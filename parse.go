@@ -54,6 +54,7 @@ const (
 	ND_ASSIGN                    // =
 	ND_RETURN                    // "return"
 	ND_IF                        // "if"
+	ND_FOR                       // "for"
 	ND_BLOCK                     // {...}
 	ND_EXPR_STMT                 // Expression statement
 	ND_VAR                       // Variable
@@ -92,6 +93,8 @@ func (nd NodeKind) String() string {
 		return "return"
 	case ND_IF:
 		return "if"
+	case ND_FOR:
+		return "for"
 	case ND_BLOCK:
 		return "Block"
 	default:
@@ -109,10 +112,13 @@ type Node struct {
 	// Block, used if kind == ND_BLOCK
 	body *Node
 
-	// "if" statement, used if kind == ND_IF
+	// "if" or "for" statement, used if kind == ND_IF || ND_FOR
 	cond *Node
 	then *Node
 	els  *Node
+	// "for" statement only
+	init *Node
+	inc  *Node
 
 	variable *Obj // used if kind == ND_VAR
 	val      int  // used if kind == ND_NUM
@@ -180,6 +186,7 @@ func newLVar(name string) *Obj {
 
 // stmt = "return" expr ";"
 //      | "if" "(" expr ")" stmt ("else" stmt)?
+//      | "for" "(" expr-stmt expr? ";" expr? ")" stmt
 //      | "{" compound-stmt
 //      | expr-stmt
 func stmt(rest **Token, tok *Token) *Node {
@@ -199,6 +206,28 @@ func stmt(rest **Token, tok *Token) *Node {
 			node.els = stmt(&tok, tok.Next)
 		}
 		*rest = tok
+		return node
+	}
+
+	if tok.equal("for") {
+		node := NewNode(ND_FOR)
+		tok = skip(tok.Next, "(")
+
+		// expr-stmt, must finish with a comma
+		node.init = exprStmt(&tok, tok)
+
+		// expr?, look if comma exists, if so it means no expr present
+		if !tok.equal(";") {
+			node.cond = expr(&tok, tok)
+		}
+		tok = skip(tok, ";")
+
+		if !tok.equal(")") {
+			node.inc = expr(&tok, tok)
+		}
+		tok = skip(tok, ")")
+
+		node.then = stmt(rest, tok)
 		return node
 	}
 
