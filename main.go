@@ -20,6 +20,13 @@ var currentInput []rune
 // codegen's depth state
 var depth int = 0
 
+// branch count
+// used in if-else label suffix
+// i.e. printf(.L.else.%d,c)
+//
+// (see codegen.go/gen_stmt())
+var count int = 1
+
 // All local variable instances created during parsing are
 // accumulated to this list
 var locals *Obj

@@ -53,6 +53,7 @@ const (
 	ND_LE                        // <=
 	ND_ASSIGN                    // =
 	ND_RETURN                    // "return"
+	ND_IF                        // "if"
 	ND_BLOCK                     // {...}
 	ND_EXPR_STMT                 // Expression statement
 	ND_VAR                       // Variable
@@ -89,6 +90,8 @@ func (nd NodeKind) String() string {
 		return " Integer "
 	case ND_RETURN:
 		return "return"
+	case ND_IF:
+		return "if"
 	case ND_BLOCK:
 		return "Block"
 	default:
@@ -105,6 +108,11 @@ type Node struct {
 
 	// Block, used if kind == ND_BLOCK
 	body *Node
+
+	// "if" statement, used if kind == ND_IF
+	cond *Node
+	then *Node
+	els  *Node
 
 	variable *Obj // used if kind == ND_VAR
 	val      int  // used if kind == ND_NUM
@@ -171,12 +179,26 @@ func newLVar(name string) *Obj {
 }
 
 // stmt = "return" expr ";"
+//      | "if" "(" expr ")" stmt ("else" stmt)?
 //      | "{" compound-stmt
 //      | expr-stmt
 func stmt(rest **Token, tok *Token) *Node {
 	if tok.equal("return") {
 		node := NewUnary(ND_RETURN, expr(&tok, tok.Next))
 		*rest = skip(tok, ";")
+		return node
+	}
+
+	if tok.equal("if") {
+		node := NewNode(ND_IF)
+		tok = skip(tok.Next, "(")
+		node.cond = expr(&tok, tok)
+		tok = skip(tok, ")")
+		node.then = stmt(&tok, tok)
+		if tok.equal("else") {
+			node.els = stmt(&tok, tok.Next)
+		}
+		*rest = tok
 		return node
 	}
 

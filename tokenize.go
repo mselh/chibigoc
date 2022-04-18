@@ -76,15 +76,6 @@ func isIdent2(r rune) bool {
 	return isIdent1(r) || ('0' <= r && r <= '9')
 }
 
-// the return string's token type is specified here
-func convertKeywords(tok *Token) {
-	for t := tok; t.Kind != EOF; t = t.Next {
-		if t.equal("return") {
-			t.Kind = KEYWORD
-		}
-	}
-}
-
 //
 // Tokenizer
 //
@@ -133,11 +124,15 @@ func (t *Token) equal(s string) bool {
 	return string(t.loc) == s
 }
 
-func NewToken(kind TokenKind, text []rune) *Token {
-	t := new(Token)
-	t.Kind = kind
-	t.loc = text
-	return t
+func (t *Token) isKeyword() bool {
+	kw := [3]string{"return", "if", "else"}
+
+	for _, v := range kw {
+		if t.equal(v) {
+			return true
+		}
+	}
+	return false
 }
 
 // ensure token->Kind == NUM
@@ -148,12 +143,30 @@ func (t *Token) number() int {
 	return t.val
 }
 
+// functions related to token type
+
+func NewToken(kind TokenKind, text []rune) *Token {
+	t := new(Token)
+	t.Kind = kind
+	t.loc = text
+	return t
+}
+
 // Ensure that the current token is `s`
 func skip(t *Token, s string) *Token {
 	if !t.equal(s) {
 		errorTok(t, "expected '%s'", s)
 	}
 	return t.Next
+}
+
+// the return string's token type is specified here
+func convertKeywords(tok *Token) {
+	for t := tok; t.Kind != EOF; t = t.Next {
+		if t.isKeyword() {
+			t.Kind = KEYWORD
+		}
+	}
 }
 
 // Tokenize `p` and returns new tokens.

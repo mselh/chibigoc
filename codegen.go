@@ -112,6 +112,19 @@ func genExpr(node *Node) {
 
 func genStmt(node *Node) {
 	switch node.kind {
+	case ND_IF:
+		count++
+		genExpr(node.cond)
+		fmt.Println(" cmp $0, %rax")
+		fmt.Printf(" je .L.else.%d\n", count)
+		genStmt(node.then)
+		fmt.Printf(" jmp .L.end.%d\n", count)
+		fmt.Printf(".L.else.%d:\n", count)
+		if node.els != nil {
+			genStmt(node.els)
+		}
+		fmt.Printf(".L.end.%d:\n", count)
+		return
 	case ND_BLOCK:
 		for n := node.body; n != nil; n = n.next {
 			genStmt(n)
